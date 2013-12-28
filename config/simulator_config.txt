@@ -1,0 +1,4 @@
+port_number = 8787;
+harvester_number = 5;
+width_of_board = 10;//number of fields
+height_of_board = 10;//number of fields
