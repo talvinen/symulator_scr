@@ -2,7 +2,10 @@
 [ ! -d build ] && mkdir build
 rm -rf build/*
 cd build
+#cmake -DCMAKE_BUILD_TYPE=Debug/Release ../admin/
 cmake ../admin/
+#colormake
 make
 cd ../
-ln -sf build/simulator_scr ./
+ln -sf build/simulator_scr simulator
+ln -sf build/driver_scr driver

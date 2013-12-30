@@ -46,6 +46,9 @@ gboolean read_simulator_config(Simulator_Params * const sim_params) {
 		sim_params->harvesterNumber = (int)paramHarvesterNumber;
 		sim_params->widthOfBoard = (int)paramWidthOfBoard;
 		sim_params->heightOfBoard = (int)paramHeightOfBoard;
+		
+		if (sim_params->harvesterNumber > sim_params->heightOfBoard)
+			sim_params->harvesterNumber = sim_params->heightOfBoard;
 	}
     
     return ret_params;
