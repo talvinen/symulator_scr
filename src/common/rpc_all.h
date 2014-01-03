@@ -1,13 +1,14 @@
-enum {
-	HARVESTER_MOVE_TO = 0,
-	END_FUNCTION
-};
+#ifndef RPC_ALL_H
+#define RPC_ALL_H
 
-typedef struct {
-	int x_coord;
-	int y_coord;
-} Move_To_Data;
+#include <tpl.h>
 
-//typedef enum {
-//	FIELD_IS_OCCUPIED = 0
-//} Msgs_Names;
+typedef enum {
+	HARVESTER_MOVE_TO_SIM_CALL = 0,
+	GET_HARVESTER_COORDINATES_SIM_CALL,
+	END_SIM_CALL
+} Simulator_Name_Calls;
+
+void send_to(tpl_node *tn, int sockfd);
+
+#endif//RPC_ALL_H

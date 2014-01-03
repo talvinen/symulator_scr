@@ -17,6 +17,17 @@ set(sources_simulator ${simulator_src_dir}/simulator_scr.c
 					  ${simulator_src_dir}/simulator_scr.h
 					  ${simulator_src_dir}/simulator_config.c
 					  ${simulator_src_dir}/simulator_config.h
+					  ${simulator_src_dir}/simulator_img_defines.c
+					  ${simulator_src_dir}/simulator_img_defines.h
+					  ${simulator_src_dir}/simulator_data.h
+					  ${simulator_src_dir}/simulator_draw.c
+					  ${simulator_src_dir}/simulator_draw.h
+					  ${simulator_src_dir}/simulator_remote_calls.c
+					  ${simulator_src_dir}/simulator_remote_calls.h
+					  ${simulator_src_dir}/board_help_calcs.c
+					  ${simulator_src_dir}/board_help_calcs.h
+					  ${src_dir}/common/rpc_data.h
+					  ${src_dir}/common/rpc_all.c
 					  ${src_dir}/common/rpc_all.h)
 set(sources_driver ${driver_src_dir}/client_scr.c)
  
@@ -32,3 +43,4 @@ INCLUDE_DIRECTORIES(${GTHREAD_INCLUDE_DIRS})
 FIND_PACKAGE(Threads)
 
 TARGET_LINK_LIBRARIES(simulator_scr ${GTK_LIBRARIES} ${GTHREAD_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT} cairo config tpl)
+TARGET_LINK_LIBRARIES(driver_scr tpl)

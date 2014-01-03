@@ -1,0 +1,4 @@
+#!/bin/bash
+exec ./simulator &
+sleep 1
+exec ./driver &

@@ -4,10 +4,10 @@
 #include <glib.h>
 
 typedef struct {
-	int portNumber;
-	int harvesterNumber;
-	int widthOfBoard;//number of fields
-	int heightOfBoard;//number of fields
+	int port_number;
+	int harvesters_number;
+	int width_of_board;//number of fields
+	int height_of_board;//number of fields
 } Simulator_Params;
 
 gboolean read_simulator_config(Simulator_Params * const sim_params);

@@ -6,10 +6,10 @@
 gboolean read_simulator_config(Simulator_Params * const sim_params) {
 	config_t cfg;               /*Returns all parameters in this structure */
 	config_setting_t *setting;
-	long int paramHarvesterNumber;
-	long int paramWidthOfBoard;
-	long int paramHeightOfBoard;
-	long int paramPortNumber;
+	long int harvesters_number_param;
+	long int width_of_board_param;
+	long int height_of_board_param;
+	long int port_number_param;
 	
 	char *config_file_name = "config/simulator_config.txt";
  
@@ -27,28 +27,28 @@ gboolean read_simulator_config(Simulator_Params * const sim_params) {
     
     gboolean ret_params = TRUE;
     
-    if (!config_lookup_int(&cfg, "port_number", &paramPortNumber))
+    if (!config_lookup_int(&cfg, "port_number", &port_number_param))
 		ret_params = FALSE;
  
-    if (!config_lookup_int(&cfg, "harvester_number", &paramHarvesterNumber))
+    if (!config_lookup_int(&cfg, "harvester_number", &harvesters_number_param))
 		ret_params = FALSE;
 	
-	if (!config_lookup_int(&cfg, "width_of_board", &paramWidthOfBoard))
+	if (!config_lookup_int(&cfg, "width_of_board", &width_of_board_param))
 		ret_params = FALSE;
 	
-	if (!config_lookup_int(&cfg, "height_of_board", &paramHeightOfBoard))
+	if (!config_lookup_int(&cfg, "height_of_board", &height_of_board_param))
 		ret_params = FALSE;
 	
     config_destroy(&cfg);
     
     if (ret_params) {
-		sim_params->portNumber = (int)paramPortNumber;
-		sim_params->harvesterNumber = (int)paramHarvesterNumber;
-		sim_params->widthOfBoard = (int)paramWidthOfBoard;
-		sim_params->heightOfBoard = (int)paramHeightOfBoard;
+		sim_params->port_number = (int)port_number_param;
+		sim_params->harvesters_number = (int)harvesters_number_param;
+		sim_params->width_of_board = (int)width_of_board_param;
+		sim_params->height_of_board = (int)height_of_board_param;
 		
-		if (sim_params->harvesterNumber > sim_params->heightOfBoard)
-			sim_params->harvesterNumber = sim_params->heightOfBoard;
+		if (sim_params->harvesters_number > sim_params->height_of_board)
+			sim_params->harvesters_number = sim_params->height_of_board;
 	}
     
     return ret_params;

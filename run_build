@@ -7,5 +7,8 @@ cmake ../admin/
 #colormake
 make
 cd ../
-ln -sf build/simulator_scr simulator
-ln -sf build/driver_scr driver
+[ ! -d bin ] && mkdir bin
+mv build/simulator_scr bin/simulator_scr
+mv build/driver_scr bin/driver_scr
+ln -sf bin/simulator_scr simulator
+ln -sf bin/driver_scr driver

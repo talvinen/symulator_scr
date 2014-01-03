@@ -14,59 +14,44 @@
 
 #include <signal.h>
 
-#include "tpl.h"
+#include <tpl.h>
 
 #include "simulator_config.h"
 
 #include "simulator_scr.h"
+#include "simulator_img_defines.h"
+#include "simulator_data.h"
+#include "simulator_draw.h"
+#include "simulator_remote_calls.h"
+#include "board_help_calcs.h"
 
 #include "../common/rpc_all.h"
-
-#define HARVESTER_IMG "icons/AAT-Battle-Tank-icon.png"
-#define BOARD_IMG "icons/Taklamakan_desert_sand_dunes_landsat_7.png"
+#include "../common/rpc_data.h"
 
 static void run_simulator(void);
 
-static gboolean on_draw_event(GtkWidget *widget, GdkEventExpose *event, gpointer user_data);
-static void drawBoard(cairo_t *cr, gint width, gint height);
-static void drawGrid(cairo_t *cr, gint width, gint height);
-static void drawHarvester(cairo_t *cr, gint width, gint height);
-
 void sigCatcher(int n);
 void *run_server(void *ptr);
-void *do_work(void *ptr);
+void *harvester_thread_work(void *harvester_param_vp);
 
+void init_simulator_images(void);
 void init_board_coord_sys(void);
+void init_harvesters_param(void);
 void init_board_environment(void);
-void init_harvester_on_board(void);
-
-int *getFieldOfBoard(int x_coord, int y_coord);
-void getCoordOfField(int * const x_coord, int * const y_coord, int index);
-
-gboolean harvester_move_to(tpl_bin tb);
-
-enum {
-	EMPTY_FIELD = 0,
-	HARVESTER_ON_FIELD
-};
+void init_harvesters_on_board(void);
+void init_refinerys_param(void);
+void init_refinerys_on_board(void);
 
 //******************GLOBAL VARIABLES********************
-static Simulator_Params sim_params = {0};
-static int *board_coord_sys = NULL;
+Simulator_Params sim_params = {0};
+int *board_coord_sys = NULL;
+Harvester_Param *harvesters_param = NULL;
 
-static struct {
-  cairo_surface_t *harvester_img;
-  cairo_surface_t *board_img;
-} glob;
-//******************************************************
+Refinery_Param refinerys_param[SIM_REFINERYS_NUMBER];
+Simulator_Imgs simulator_imgs[SIM_IMGS_NUMBER];
 
 GStaticRecMutex board_coord_sys_mutex = G_STATIC_REC_MUTEX_INIT;
-
-//gboolean do_drawing2(gpointer data);
-
-gboolean (*callback_function_serv[]) (tpl_bin tb) = {
-	harvester_move_to
-};
+//******************************************************
 
 int main(int argc, char *argv[]) {
 	GThread *main_sim_thread;
@@ -77,7 +62,7 @@ int main(int argc, char *argv[]) {
 	if (!read_simulator_config(&sim_params))
 		return 1;
 	printf("Parametry:\nport_number = %d\nharvester_number = %d\nwidth_of_board = %d\nheight_of_board = %d\n",
-		sim_params.portNumber, sim_params.harvesterNumber, sim_params.widthOfBoard, sim_params.heightOfBoard);
+		sim_params.port_number, sim_params.harvesters_number, sim_params.width_of_board, sim_params.height_of_board);
 	
 	if (g_thread_supported()) {
 		g_thread_init(NULL);
@@ -88,6 +73,9 @@ int main(int argc, char *argv[]) {
 	}
 	
 	init_board_coord_sys();
+	init_harvesters_param();
+	init_refinerys_param();
+	init_refinerys_on_board();
 	init_board_environment();
 	
 	if ((main_sim_thread = g_thread_create((GThreadFunc)run_server, NULL, TRUE, &err)) == NULL) {
@@ -98,17 +86,16 @@ int main(int argc, char *argv[]) {
 	
 	gtk_init(&argc, &argv);
 	
-	run_simulator();
+	init_simulator_images();
 	
+	run_simulator();
+		
 	return 0;
 }
 
 static void run_simulator(void) {
 	GtkWidget *main_window;
 	GtkWidget *draw_area;
-	
-	glob.harvester_img = cairo_image_surface_create_from_png(HARVESTER_IMG);
-	glob.board_img = cairo_image_surface_create_from_png(BOARD_IMG);
 	
 	main_window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
 	
@@ -131,123 +118,6 @@ static void run_simulator(void) {
 	gtk_main();	
 }
 
-static gboolean on_draw_event(GtkWidget *widget, GdkEventExpose *event, gpointer user_data) {
-	cairo_t *cr = gdk_cairo_create( gtk_widget_get_window (widget));
-	gint width = widget->allocation.width;
-	gint height = widget->allocation.height;
-	
-	drawBoard(cr, width, height);
-	drawGrid(cr, width, height);
-	drawHarvester(cr, width, height);
-	return FALSE;
-}
-
-static void drawBoard(cairo_t *cr, gint width, gint height) {
-	cairo_save(cr);
-	
-	double w = cairo_image_surface_get_width(glob.board_img);
-	double h = cairo_image_surface_get_height(glob.board_img);
-	
-	cairo_scale(cr, width/w, height/h);
-		
-	cairo_set_source_surface(cr, glob.board_img, 0, 0);
-	cairo_paint(cr);
-	
-	cairo_restore(cr);
-}
-
-static void drawGrid(cairo_t *cr, gint width, gint height) {
-	gint deltaHeight = height / sim_params.heightOfBoard;
-	gint deltaWidth = width / sim_params.widthOfBoard;
-	
-	cairo_save(cr);
-	
-	cairo_set_source_rgb(cr, 0, 0, 0);
-	cairo_set_line_width(cr, 2);
-	
-	int i;
-	for (i = 0; i < sim_params.heightOfBoard; i++ ) {
-		cairo_move_to(cr, 0, deltaHeight * i);
-		cairo_line_to(cr, width, deltaHeight * i);
-	}
-	for (i = 0; i < sim_params.widthOfBoard; i++ ) {
-		cairo_move_to(cr, deltaWidth * i, 0);
-		cairo_line_to(cr, deltaWidth * i, height);
-	}
-	cairo_stroke(cr);
-	cairo_restore(cr);
-}
-
-static void drawHarvester(cairo_t *cr, gint width, gint height) {
-	gint deltaHeight = height / sim_params.heightOfBoard;
-	gint deltaWidth = width / sim_params.widthOfBoard;
-	
-	int x_coord, y_coord;
-	
-	int index;
-	int size = sim_params.widthOfBoard * sim_params.heightOfBoard;
-	for (index = 0; index < size; ++index) {
-		getCoordOfField(&x_coord, &y_coord, index);
-		
-		g_static_rec_mutex_lock(&board_coord_sys_mutex);
-		
-		int *field;
-		int value_of_field;
-		field = getFieldOfBoard(x_coord, y_coord);
-		value_of_field = *field;
-		
-		g_static_rec_mutex_unlock(&board_coord_sys_mutex);
-		
-		if (value_of_field != HARVESTER_ON_FIELD) {
-			continue;
-		}
-		
-		cairo_save(cr);
-		
-		cairo_set_source_rgb(cr, 0, 0, 0);
-		cairo_set_line_width(cr, 2);
-	
-	
-		double w = cairo_image_surface_get_width(glob.harvester_img);
-		double h = cairo_image_surface_get_height(glob.harvester_img);
-	
-		cairo_translate(cr, deltaWidth * x_coord, deltaHeight * y_coord);
-		cairo_scale(cr, deltaWidth/w, deltaHeight/h);
-		
-		cairo_set_source_surface(cr, glob.harvester_img, 0, 0);
-		cairo_paint(cr);
-	
-		cairo_restore(cr);
-	}
-	
-	/*cairo_save(cr);
-	
-	cairo_set_source_rgb(cr, 0, 0, 0);
-	cairo_set_line_width(cr, 2);
-	
-	//static int i = 0;
-	//static int x = 1;
-	
-	double w = cairo_image_surface_get_width(glob.harvester_img);
-	double h = cairo_image_surface_get_height(glob.harvester_img);
-	
-	cairo_translate(cr, deltaWidth * i, deltaHeight * i);
-	cairo_scale(cr, deltaWidth/w, deltaHeight/h);
-		
-	cairo_set_source_surface(cr, glob.harvester_img, 0, 0);
-	cairo_paint(cr);
-	
-	cairo_restore(cr);
-	
-	//if (i == sim_params.widthOfBoard - 1)
-	//	x = -1;
-	//else if (i == 0)
-	//	x = 1;
-		
-	//i += x;
-	*/
-}
-
 gboolean do_drawing2(gpointer data) {
 	GtkWidget *widget = (GtkWidget *)data;
 	gint width = widget->allocation.width;
@@ -262,18 +132,15 @@ void sigCatcher(int n) {
 }
 
 void *run_server(void *ptr) {
-	int sockfd;
-	socklen_t clilen;
+	int sock_fd, newsock_fd;
+	socklen_t cli_len;
 	struct sockaddr_in serv_addr, cli_addr;
 	
-	GThread *harvester_threads[sim_params.harvesterNumber];
-	int harvester_socket[sim_params.harvesterNumber];
+	GThread *harvester_threads[sim_params.harvesters_number];
 	GError *err;
-	
-	sockfd = socket(AF_INET, SOCK_STREAM, 0);
-	
-	
-	if (sockfd < 0) {
+		
+	sock_fd = socket(AF_INET, SOCK_STREAM, 0);
+	if (sock_fd < 0) {
 		fprintf(stderr, "ERROR opening socket");
 		return NULL;
 	}
@@ -281,49 +148,53 @@ void *run_server(void *ptr) {
 	bzero((char *) &serv_addr, sizeof(serv_addr));
 	serv_addr.sin_family = AF_INET;
 	serv_addr.sin_addr.s_addr = INADDR_ANY;
-	serv_addr.sin_port = htons(sim_params.portNumber);
+	serv_addr.sin_port = htons(sim_params.port_number);
 	
-	if (bind(sockfd, (struct sockaddr *) &serv_addr, sizeof(serv_addr)) < 0) {
+	if (bind(sock_fd, (struct sockaddr *) &serv_addr, sizeof(serv_addr)) < 0) {
 		fprintf(stderr, "ERROR on binding\n");
 		return NULL;
 	}
 	
-	listen(sockfd, 5);
-	clilen = sizeof(cli_addr);
+	listen(sock_fd, 5);
+	cli_len = sizeof(cli_addr);
 	
-	int clientsNumber = 0;
-	while (1) {
-		harvester_socket[clientsNumber] = accept(sockfd, (struct sockaddr *) &cli_addr, &clilen);
+	Harvester_Id harvester_id = 0;
+	while (TRUE) {
+		newsock_fd = accept(sock_fd, (struct sockaddr *) &cli_addr, &cli_len);
 		
-		if (harvester_socket[clientsNumber] < 0) {
+		if (newsock_fd < 0) {
 			fprintf(stderr, "ERROR on accept\n");
 			break;
 		}
 		
-		if ((harvester_threads[clientsNumber] = g_thread_create((GThreadFunc)do_work,
-			(void *)&(harvester_socket[clientsNumber]), TRUE, &err)) == NULL) {
+		harvesters_param[harvester_id].harvester_id = harvester_id;
+		harvesters_param[harvester_id].harvester_socket = newsock_fd;
+		
+		if ((harvester_threads[harvester_id] = g_thread_create((GThreadFunc)harvester_thread_work,
+			(void *)&(harvesters_param[harvester_id]), TRUE, &err)) == NULL) {
 			
 			printf("Thread create failed: %s!!\n", err->message);
 			g_error_free(err);
-			close(harvester_socket[clientsNumber]);
+			close(harvesters_param[harvester_id].harvester_socket);
 			break;
 		}
-		++clientsNumber;
+		++harvester_id;
 		
-		if (clientsNumber == sim_params.harvesterNumber)
+		if (harvester_id == sim_params.harvesters_number)
 			break;
 		
 	} //while
 	
-	int i = 0;
-	while (i < sim_params.harvesterNumber)
-		g_thread_join(harvester_threads[i++]);
+	harvester_id = 0;
+	while (harvester_id < sim_params.harvesters_number)
+		g_thread_join(harvester_threads[harvester_id++]);
 	
-	close(sockfd);
+	close(sock_fd);
 	return NULL;
 }
 
-void *do_work(void *ptr) {
+void *harvester_thread_work(void *harvester_param_vp) {
+	Harvester_Param *harvester_param;
 	int rc = 0;
 	int sock;
 	gboolean run = TRUE;
@@ -335,7 +206,8 @@ void *do_work(void *ptr) {
 	tpl_bin tb;
 	int32_t function_name;
 	
-	sock = *(int *)ptr;
+	harvester_param = (Harvester_Param *)harvester_param_vp;
+	sock = harvester_param->harvester_socket;
 	
 	while (run) {
 		
@@ -346,8 +218,8 @@ void *do_work(void *ptr) {
 			tpl_load(tn, TPL_MEM, img, sz);
 			tpl_unpack(tn, 0);
 			
-			if (function_name >=0 && function_name < END_FUNCTION)
-				(*callback_function_serv[function_name])(tb);
+			if (function_name >=0 && function_name < END_SIM_CALL)
+				(*callback_function_sim[function_name])(&tb, harvester_param->harvester_id);
 			
 			free(tb.addr);
 			tb.addr = NULL;
@@ -364,67 +236,100 @@ void *do_work(void *ptr) {
 	return NULL;
 }
 
+void init_simulator_images(void) {
+	int images_index;
+	for (images_index = 0; images_index < SIM_IMGS_NUMBER; ++images_index) {
+		simulator_imgs[images_index].image =
+			cairo_image_surface_create_from_png(simulator_images_path[images_index]);
+		
+		simulator_imgs[images_index].width =
+			cairo_image_surface_get_width(simulator_imgs[images_index].image);
+		
+		simulator_imgs[images_index].height =
+			cairo_image_surface_get_height(simulator_imgs[images_index].image);
+	}
+}
+
 void init_board_coord_sys(void) {
 	if (board_coord_sys == NULL)
 		board_coord_sys = g_malloc0((gsize)(sizeof(int)
-		* sim_params.widthOfBoard
-		* sim_params.heightOfBoard));
+		* sim_params.width_of_board
+		* sim_params.height_of_board));
+}
+
+void init_harvesters_param(void) {
+	if (harvesters_param == NULL)
+		harvesters_param = g_malloc0((gsize)(sizeof(Harvester_Param) * sim_params.harvesters_number));
 }
 
 void init_board_environment(void) {
 	if (board_coord_sys == NULL)
 		return;
 	
-	init_harvester_on_board();
+	init_harvesters_on_board();
 }
 
-void init_harvester_on_board(void) {
-	int *field;
+void init_harvesters_on_board(void) {
 	int x_coord;
 	int y_coord;
 	
-	x_coord = sim_params.widthOfBoard - 1;
+	//Wszystkie pojazdy ustawiane sa na pozycji startowej w prawym krancu planszy w pionie
+	x_coord = sim_params.width_of_board - 1;
 	
-	for (y_coord = 0; y_coord < sim_params.harvesterNumber; ++y_coord) {
+	for (y_coord = 0; y_coord < sim_params.harvesters_number; ++y_coord) {
 		int *field;
-		field = getFieldOfBoard(x_coord, y_coord);
-		*field = HARVESTER_ON_FIELD;
+		field = get_field_of_board(x_coord, y_coord);
+		*field = OBJECT_ON_FIELD;
+		
+		harvesters_param[y_coord].harvester_coord.x_coord = x_coord;
+		harvesters_param[y_coord].harvester_coord.y_coord = y_coord;
 	}
 }
 
-gboolean harvester_move_to(tpl_bin tb) {
-	if (board_coord_sys == NULL)
-		return FALSE;
+void init_refinerys_param(void) {
+	int x_coord;
+	int y_coord;
+	
+	int sim_refinery_width = 3;
+	int sim_refinery_height = 3;
+	
+	x_coord = sim_params.width_of_board - 1;
+	
+	int i;
+	for (i = 0; i < SIM_REFINERYS_NUMBER; ++i) {
+		if (i == SIM_REFINERYS_NUMBER - 1)
+			x_coord = sim_params.width_of_board - sim_refinery_width;
+		else
+			x_coord = 0;
+			
+		if (i == 0)
+			y_coord = 0;
+		else
+			y_coord = sim_params.height_of_board - sim_refinery_height;
 		
-	if (tb.sz <= 0)
-		return FALSE;
-	
-	Move_To_Data *mvd = (Move_To_Data *)tb.addr;	
-	
-	gboolean ret = FALSE;
-	
-	g_static_rec_mutex_lock(&board_coord_sys_mutex);
-	
-	int *field;
-	field = getFieldOfBoard(mvd->x_coord, mvd->y_coord);
+		refinerys_param[i].refinery_coord.x_coord = x_coord;
+		refinerys_param[i].refinery_coord.y_coord = y_coord;
 		
-	if (*field == EMPTY_FIELD) {
-		*field = HARVESTER_ON_FIELD;
-		ret = TRUE;
+		refinerys_param[i].width = sim_refinery_width;
+		refinerys_param[i].height = sim_refinery_height;
 	}
-	
-	g_static_rec_mutex_unlock(&board_coord_sys_mutex);
-	
-	return ret;
 }
 
-int *getFieldOfBoard(int x_coord, int y_coord) {
-	int *field;
-	field = board_coord_sys + sim_params.widthOfBoard * y_coord + x_coord;
-	return field;
-}
-
-void getCoordOfField(int * const x_coord, int * const y_coord, int index) {
-	*x_coord = index % sim_params.widthOfBoard;
-	*y_coord = index / sim_params.widthOfBoard;
+void init_refinerys_on_board(void) {
+	int i;
+	for (i = 0; i < SIM_REFINERYS_NUMBER; ++i) {
+		int x_coord = refinerys_param[i].refinery_coord.x_coord;
+		int y_coord = refinerys_param[i].refinery_coord.y_coord;
+		
+		int y;
+		for (y = 0; y < refinerys_param[i].height; ++y, ++y_coord) {
+			int x;
+			int next_x_coord = x_coord;
+			for (x = 0; x < refinerys_param[i].width; ++x, ++next_x_coord) {
+				int *field;
+				field = get_field_of_board(next_x_coord, y_coord);
+				*field = OBJECT_ON_FIELD;
+			}
+		}
+	}
 }
