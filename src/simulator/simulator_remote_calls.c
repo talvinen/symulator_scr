@@ -71,6 +71,20 @@ void harvester_move_to_sim_reply(gboolean ret, int sockfd) {
 	tpl_free(tn);
 }
 
+/*void simulator_move_to_sim_reply(gboolean ret, int sockfd) {
+	int32_t reply;
+	tpl_node *tn;
+	
+	reply = (int32_t)ret;
+	
+	tn = tpl_map("i", &reply);
+	tpl_pack(tn, 0);
+	
+	send_to(tn, sockfd);
+	
+	tpl_free(tn);
+}*/
+
 void get_harvester_coordinates_sim_call(const tpl_bin * const __attribute__((unused)) tb, Harvester_Id harvester_id) {
 	int x_coord;
 	int y_coord;

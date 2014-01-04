@@ -1,7 +1,7 @@
 #ifndef SIMULATOR_DATA_H
 #define SIMULATOR_DATA_H
 
-#include <cairo.h>
+#include <librsvg/rsvg.h>
 #include <gtk/gtk.h>
 #include "../common/simulator_config.h"
 #include "../common/rpc_data.h"
@@ -37,9 +37,9 @@ typedef struct {
 } Mineral_Param;
 
 typedef struct {
-	cairo_surface_t *image;
-	double width;
-	double height;
+	RsvgHandle *image;
+	int width;
+	int height;
 } Simulator_Imgs;
 
 extern Simulator_Params sim_params;
@@ -47,6 +47,7 @@ extern Board_Coord_Param *board_coord_sys;
 extern Harvester_Param *harvesters_param;
 extern Mineral_Param *minerals_param;
 extern Refinery_Param refinerys_param[SIM_REFINERYS_NUMBER];
+extern Object_Coord_On_Board drop_zones_param[SIM_REFINERYS_NUMBER];
 extern Simulator_Imgs simulator_imgs[SIM_IMGS_NUMBER];
 extern GStaticRecMutex board_coord_sys_mutex;
 

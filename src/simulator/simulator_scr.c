@@ -1,4 +1,6 @@
 #include <cairo.h>
+#include <librsvg/rsvg.h>
+#include <librsvg/rsvg-cairo.h>
 #include <gtk/gtk.h>
 //#include <math.h>
 
@@ -42,6 +44,8 @@ void init_board_environment(void);
 void init_harvesters_on_board(void);
 void init_refinerys_param(void);
 void init_refinerys_on_board(void);
+void init_drop_zones_param(void);
+void init_drop_zones_on_board(void);
 void init_minerals_param(void);
 void init_minerals_on_board(void);
 
@@ -52,6 +56,7 @@ Harvester_Param *harvesters_param = NULL;
 Mineral_Param *minerals_param = NULL;
 
 Refinery_Param refinerys_param[SIM_REFINERYS_NUMBER] = {0};
+Object_Coord_On_Board drop_zones_param[SIM_REFINERYS_NUMBER] = {0};
 Simulator_Imgs simulator_imgs[SIM_IMGS_NUMBER] = {0};
 
 static const int sim_refinery_width = 3;
@@ -229,16 +234,18 @@ void *harvester_thread_work(void *harvester_param_vp) {
 }
 
 void init_simulator_images(void) {
+	RsvgDimensionData dimension_img;
 	int images_index;
 	for (images_index = 0; images_index < SIM_IMGS_NUMBER; ++images_index) {
 		simulator_imgs[images_index].image =
-			cairo_image_surface_create_from_png(simulator_images_path[images_index]);
+			rsvg_handle_new_from_file(simulator_images_path[images_index], NULL);
+			
+		g_assert(simulator_imgs[images_index].image != NULL);
+				
+		rsvg_handle_get_dimensions(simulator_imgs[images_index].image, &dimension_img);
 		
-		simulator_imgs[images_index].width =
-			cairo_image_surface_get_width(simulator_imgs[images_index].image);
-		
-		simulator_imgs[images_index].height =
-			cairo_image_surface_get_height(simulator_imgs[images_index].image);
+		simulator_imgs[images_index].width = dimension_img.width;
+		simulator_imgs[images_index].height = dimension_img.height;
 	}
 }
 
@@ -263,16 +270,16 @@ void init_board_environment(void) {
 	init_refinerys_param();
 	init_refinerys_on_board();
 	
+	init_drop_zones_param();
+	
 	init_minerals_param();
 	init_minerals_on_board();
 }
 
 void init_harvesters_on_board(void) {
-	int x_coord;
-	int y_coord;
-	
 	//Wszystkie pojazdy ustawiane sa na pozycji startowej w prawym krancu planszy w pionie
-	x_coord = sim_params.width_of_board - 1;
+	const int x_coord = sim_params.width_of_board - 1;
+	int y_coord;
 	
 	for (y_coord = 0; y_coord < sim_params.number_of_harvesters; ++y_coord) {
 		Board_Coord_Param *field;
@@ -285,13 +292,11 @@ void init_harvesters_on_board(void) {
 }
 
 void init_refinerys_param(void) {
-	int x_coord;
-	int y_coord;
-	
-	x_coord = sim_params.width_of_board - 1;
-	
 	int i;
 	for (i = 0; i < SIM_REFINERYS_NUMBER; ++i) {
+		int x_coord;
+		int y_coord;
+		
 		if (i == SIM_REFINERYS_NUMBER - 1)
 			x_coord = sim_params.width_of_board - sim_refinery_width;
 		else
@@ -337,16 +342,20 @@ void init_minerals_param(void) {
 }
 
 void init_minerals_on_board(void) {
-	int seed = time(NULL);
-	int number_of_minerals = sim_params.width_of_board
+	int seed;
+	const int number_of_minerals = sim_params.width_of_board
 		* sim_params.height_of_board * sim_params.number_of_minerals / 100;
 		
+	seed = time(NULL);
 	srand(seed);
+	
+	int min_x= sim_refinery_width + 1;
+	int min_y = sim_refinery_height + 1;
 	
 	int mineral_ind = 0;
     while (mineral_ind < number_of_minerals) {
-		int x_coord = rand() % ((sim_params.width_of_board - 5) - 4 + 1) + 4;
-		int y_coord = rand() % ((sim_params.height_of_board - 5) - 4 + 1) + 4;
+		int x_coord = rand() % ((sim_params.width_of_board - (min_x + 1)) - min_x + 1) + min_x;
+		int y_coord = rand() % ((sim_params.height_of_board - (min_y + 1)) - min_y + 1) + min_y;
 		
 		Board_Coord_Param *field;
 		field = get_field_of_board(x_coord, y_coord);
@@ -359,5 +368,38 @@ void init_minerals_on_board(void) {
 			minerals_param[mineral_ind].is_exist = TRUE;
 			++mineral_ind;
 		}
+	}
+}
+
+void init_drop_zones_param(void) {
+	int i;
+	for (i = 0; i < SIM_REFINERYS_NUMBER; ++i) {
+		int x_coord;
+		int y_coord;
+		
+		if (i == SIM_REFINERYS_NUMBER - 1)
+			x_coord = sim_params.width_of_board - sim_refinery_width - 1;
+		else
+			x_coord = sim_refinery_width;
+			
+		if (i == 0)
+			y_coord = sim_refinery_height - 1;
+		else
+			y_coord = sim_params.height_of_board - 1;
+		
+		drop_zones_param[i].x_coord = x_coord;
+		drop_zones_param[i].y_coord = y_coord;
+	}
+}
+
+void init_drop_zones_on_board(void) {
+	int i;
+	for (i = 0; i < SIM_REFINERYS_NUMBER; ++i) {
+		int x_coord = drop_zones_param[i].x_coord;
+		int y_coord = drop_zones_param[i].y_coord;
+		
+		Board_Coord_Param *field;
+		field = get_field_of_board(x_coord, y_coord);
+		*field = DROP_ZONE_ON_FIELD;
 	}
 }
