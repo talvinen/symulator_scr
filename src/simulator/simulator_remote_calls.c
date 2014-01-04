@@ -22,10 +22,10 @@ void harvester_move_to_sim_call(const tpl_bin * const tb, Harvester_Id harvester
 	if (board_coord_sys == NULL || tb->sz <= 0 || tb->addr == NULL)
 		ret = FALSE;
 	
-	int *field;
-	Object_Coord_On_Board *harvester_coord;
-	
 	if (ret) {
+		Board_Coord_Param *field;
+		Object_Coord_On_Board *harvester_coord;
+		
 		harvester_coord = (Object_Coord_On_Board *)tb->addr;
 		
 		g_static_rec_mutex_lock(&board_coord_sys_mutex);
@@ -33,7 +33,7 @@ void harvester_move_to_sim_call(const tpl_bin * const tb, Harvester_Id harvester
 		field = get_field_of_board(harvester_coord->x_coord, harvester_coord->y_coord);
 		
 		if (field && *field == EMPTY_FIELD) {
-			*field = OBJECT_ON_FIELD;
+			*field = HARVESTER_ON_FIELD;
 		} else
 			ret = FALSE;
 		

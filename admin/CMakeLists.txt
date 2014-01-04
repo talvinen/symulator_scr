@@ -11,12 +11,13 @@ set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -g -O3")
 set(src_dir ${CMAKE_CURRENT_SOURCE_DIR}/../src/)
 set(simulator_src_dir ${src_dir}/simulator/)
 set(driver_src_dir ${src_dir}/driver/)
+set(common_src_dir ${src_dir}/common/)
 
 # create a list of source files (easier to maintain)
 set(sources_simulator ${simulator_src_dir}/simulator_scr.c
 					  ${simulator_src_dir}/simulator_scr.h
-					  ${simulator_src_dir}/simulator_config.c
-					  ${simulator_src_dir}/simulator_config.h
+					  ${common_src_dir}/simulator_config.c
+					  ${common_src_dir}/simulator_config.h
 					  ${simulator_src_dir}/simulator_img_defines.c
 					  ${simulator_src_dir}/simulator_img_defines.h
 					  ${simulator_src_dir}/simulator_data.h
@@ -26,10 +27,13 @@ set(sources_simulator ${simulator_src_dir}/simulator_scr.c
 					  ${simulator_src_dir}/simulator_remote_calls.h
 					  ${simulator_src_dir}/board_help_calcs.c
 					  ${simulator_src_dir}/board_help_calcs.h
-					  ${src_dir}/common/rpc_data.h
-					  ${src_dir}/common/rpc_all.c
-					  ${src_dir}/common/rpc_all.h)
-set(sources_driver ${driver_src_dir}/client_scr.c)
+					  ${common_src_dir}/rpc_data.h
+					  ${common_src_dir}/rpc_all.c
+					  ${common_src_dir}/rpc_all.h)
+
+set(sources_driver ${driver_src_dir}/driver_scr.c
+                   ${common_src_dir}/simulator_config.c
+                   ${common_src_dir}/simulator_config.h)
  
 ADD_EXECUTABLE(simulator_scr ${sources_simulator})
 ADD_EXECUTABLE(driver_scr ${sources_driver})
@@ -43,4 +47,4 @@ INCLUDE_DIRECTORIES(${GTHREAD_INCLUDE_DIRS})
 FIND_PACKAGE(Threads)
 
 TARGET_LINK_LIBRARIES(simulator_scr ${GTK_LIBRARIES} ${GTHREAD_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT} cairo config tpl)
-TARGET_LINK_LIBRARIES(driver_scr tpl)
+TARGET_LINK_LIBRARIES(driver_scr ${CMAKE_THREAD_LIBS_INIT} config tpl)

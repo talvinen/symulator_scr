@@ -1,4 +1,5 @@
 port_number = 8787;
-harvester_number = 5;
+number_of_harvesters = 5;
 width_of_board = 20;//number of fields
 height_of_board = 20;//number of fields
+number_of_minerals = 10;//percent of the board occupied by minerals

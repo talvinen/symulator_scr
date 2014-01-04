@@ -5,6 +5,7 @@
 //#include <unistd.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 //#include <sys/types.h>
 #include <sys/socket.h>
@@ -16,7 +17,7 @@
 
 #include <tpl.h>
 
-#include "simulator_config.h"
+#include "../common/simulator_config.h"
 
 #include "simulator_scr.h"
 #include "simulator_img_defines.h"
@@ -29,8 +30,8 @@
 #include "../common/rpc_data.h"
 
 static void run_simulator(void);
+gboolean stop_simulator(void);
 
-void sigCatcher(int n);
 void *run_server(void *ptr);
 void *harvester_thread_work(void *harvester_param_vp);
 
@@ -41,50 +42,54 @@ void init_board_environment(void);
 void init_harvesters_on_board(void);
 void init_refinerys_param(void);
 void init_refinerys_on_board(void);
+void init_minerals_param(void);
+void init_minerals_on_board(void);
 
 //******************GLOBAL VARIABLES********************
 Simulator_Params sim_params = {0};
-int *board_coord_sys = NULL;
+Board_Coord_Param *board_coord_sys = NULL;
 Harvester_Param *harvesters_param = NULL;
+Mineral_Param *minerals_param = NULL;
 
-Refinery_Param refinerys_param[SIM_REFINERYS_NUMBER];
-Simulator_Imgs simulator_imgs[SIM_IMGS_NUMBER];
+Refinery_Param refinerys_param[SIM_REFINERYS_NUMBER] = {0};
+Simulator_Imgs simulator_imgs[SIM_IMGS_NUMBER] = {0};
+
+static const int sim_refinery_width = 3;
+static const int sim_refinery_height = 3;
+
+GMainLoop *main_loop;
 
 GStaticRecMutex board_coord_sys_mutex = G_STATIC_REC_MUTEX_INIT;
 //******************************************************
 
-int main(int argc, char *argv[]) {
-	GThread *main_sim_thread;
-	GError *err;
-	
-	signal(SIGCHLD, sigCatcher);
+int main(int argc, char *argv[]) {		
+	 if (g_thread_supported()) {
+		 g_thread_init(NULL);
+		 gdk_threads_init();
+	 } else {
+		 printf("g_thread NOT supported\n");
+		 return 1;
+	 }
+
 	
 	if (!read_simulator_config(&sim_params))
 		return 1;
-	printf("Parametry:\nport_number = %d\nharvester_number = %d\nwidth_of_board = %d\nheight_of_board = %d\n",
-		sim_params.port_number, sim_params.harvesters_number, sim_params.width_of_board, sim_params.height_of_board);
+		
+	if (sim_params.number_of_harvesters > sim_params.height_of_board - sim_refinery_height)
+		sim_params.number_of_harvesters = sim_params.height_of_board - sim_refinery_height;
+	if (sim_params.number_of_minerals > 30)
+		sim_params.number_of_minerals = 30;
+	printf("Parametry:\nport_number = %d\nnumber_of_harvesters = %d\n\
+width_of_board = %d\nheight_of_board = %d\nnumber_of_minerals(percent of the board occupied by minerals) = %d\n",
+		sim_params.port_number, sim_params.number_of_harvesters,
+		sim_params.width_of_board, sim_params.height_of_board, sim_params.number_of_minerals);
 	
-	if (g_thread_supported()) {
-		g_thread_init(NULL);
-		gdk_threads_init();// Called to initialize internal mutex "gdk_threads_mutex".
-	} else {
-		printf("g_thread NOT supported\n");
-		return 1;
-	}
-	
-	init_board_coord_sys();
-	init_harvesters_param();
-	init_refinerys_param();
-	init_refinerys_on_board();
 	init_board_environment();
 	
-	if ((main_sim_thread = g_thread_create((GThreadFunc)run_server, NULL, TRUE, &err)) == NULL) {
-		printf("Thread create failed: %s!!\n", err->message);
-		g_error_free(err);
-		return 1;
-     }
+	(void)g_thread_create((GThreadFunc)run_server, NULL, FALSE, NULL);
 	
 	gtk_init(&argc, &argv);
+	main_loop = g_main_loop_new(NULL, FALSE);
 	
 	init_simulator_images();
 	
@@ -106,16 +111,20 @@ static void run_simulator(void) {
 		G_CALLBACK(on_draw_event), NULL);
 	
 	g_timeout_add(1000, do_drawing2, draw_area);
-	g_signal_connect(main_window, "destroy",
-		G_CALLBACK(gtk_main_quit), NULL);
+	g_signal_connect(G_OBJECT(main_window), "destroy",
+		G_CALLBACK(stop_simulator), NULL);
 	
 	gtk_window_set_position(GTK_WINDOW(main_window), GTK_WIN_POS_CENTER);
 	gtk_window_set_default_size(GTK_WINDOW(main_window), 800, 600); 
 	gtk_window_set_title(GTK_WINDOW(main_window), "Symulator");
 	
 	gtk_widget_show_all(main_window);
+	
+	g_main_loop_run(main_loop);
+}
 
-	gtk_main();	
+gboolean stop_simulator(void) {
+	g_main_loop_quit(main_loop);
 }
 
 gboolean do_drawing2(gpointer data) {
@@ -127,16 +136,12 @@ gboolean do_drawing2(gpointer data) {
 	return TRUE;
 }
 
-void sigCatcher(int n) {
-	wait3(NULL, WNOHANG, NULL);
-}
-
 void *run_server(void *ptr) {
 	int sock_fd, newsock_fd;
 	socklen_t cli_len;
 	struct sockaddr_in serv_addr, cli_addr;
 	
-	GThread *harvester_threads[sim_params.harvesters_number];
+	GThread *harvester_threads[sim_params.number_of_harvesters];
 	GError *err;
 		
 	sock_fd = socket(AF_INET, SOCK_STREAM, 0);
@@ -159,35 +164,22 @@ void *run_server(void *ptr) {
 	cli_len = sizeof(cli_addr);
 	
 	Harvester_Id harvester_id = 0;
-	while (TRUE) {
+	while (harvester_id < sim_params.number_of_harvesters) {
 		newsock_fd = accept(sock_fd, (struct sockaddr *) &cli_addr, &cli_len);
 		
 		if (newsock_fd < 0) {
 			fprintf(stderr, "ERROR on accept\n");
-			break;
+			stop_simulator();
 		}
 		
 		harvesters_param[harvester_id].harvester_id = harvester_id;
 		harvesters_param[harvester_id].harvester_socket = newsock_fd;
 		
-		if ((harvester_threads[harvester_id] = g_thread_create((GThreadFunc)harvester_thread_work,
-			(void *)&(harvesters_param[harvester_id]), TRUE, &err)) == NULL) {
-			
-			printf("Thread create failed: %s!!\n", err->message);
-			g_error_free(err);
-			close(harvesters_param[harvester_id].harvester_socket);
-			break;
-		}
-		++harvester_id;
-		
-		if (harvester_id == sim_params.harvesters_number)
-			break;
-		
-	} //while
-	
-	harvester_id = 0;
-	while (harvester_id < sim_params.harvesters_number)
-		g_thread_join(harvester_threads[harvester_id++]);
+		harvester_threads[harvester_id] = g_thread_create((GThreadFunc)harvester_thread_work,
+			(void *)&(harvesters_param[harvester_id++]), TRUE, &err);
+	}
+	while (harvester_id < sim_params.number_of_harvesters)
+		g_thread_join(harvester_threads[harvester_id--]);
 	
 	close(sock_fd);
 	return NULL;
@@ -250,23 +242,29 @@ void init_simulator_images(void) {
 	}
 }
 
+void init_harvesters_param(void) {
+	if (harvesters_param == NULL)
+		harvesters_param = g_malloc0((gsize)(sizeof(Harvester_Param) * sim_params.number_of_harvesters));
+}
+
 void init_board_coord_sys(void) {
 	if (board_coord_sys == NULL)
-		board_coord_sys = g_malloc0((gsize)(sizeof(int)
+		board_coord_sys = g_malloc0((gsize)(sizeof(Board_Coord_Param)
 		* sim_params.width_of_board
 		* sim_params.height_of_board));
 }
 
-void init_harvesters_param(void) {
-	if (harvesters_param == NULL)
-		harvesters_param = g_malloc0((gsize)(sizeof(Harvester_Param) * sim_params.harvesters_number));
-}
-
 void init_board_environment(void) {
-	if (board_coord_sys == NULL)
-		return;
+	init_board_coord_sys();
 	
+	init_harvesters_param();
 	init_harvesters_on_board();
+	
+	init_refinerys_param();
+	init_refinerys_on_board();
+	
+	init_minerals_param();
+	init_minerals_on_board();
 }
 
 void init_harvesters_on_board(void) {
@@ -276,10 +274,10 @@ void init_harvesters_on_board(void) {
 	//Wszystkie pojazdy ustawiane sa na pozycji startowej w prawym krancu planszy w pionie
 	x_coord = sim_params.width_of_board - 1;
 	
-	for (y_coord = 0; y_coord < sim_params.harvesters_number; ++y_coord) {
-		int *field;
+	for (y_coord = 0; y_coord < sim_params.number_of_harvesters; ++y_coord) {
+		Board_Coord_Param *field;
 		field = get_field_of_board(x_coord, y_coord);
-		*field = OBJECT_ON_FIELD;
+		*field = HARVESTER_ON_FIELD;
 		
 		harvesters_param[y_coord].harvester_coord.x_coord = x_coord;
 		harvesters_param[y_coord].harvester_coord.y_coord = y_coord;
@@ -289,9 +287,6 @@ void init_harvesters_on_board(void) {
 void init_refinerys_param(void) {
 	int x_coord;
 	int y_coord;
-	
-	int sim_refinery_width = 3;
-	int sim_refinery_height = 3;
 	
 	x_coord = sim_params.width_of_board - 1;
 	
@@ -326,10 +321,43 @@ void init_refinerys_on_board(void) {
 			int x;
 			int next_x_coord = x_coord;
 			for (x = 0; x < refinerys_param[i].width; ++x, ++next_x_coord) {
-				int *field;
+				Board_Coord_Param *field;
 				field = get_field_of_board(next_x_coord, y_coord);
-				*field = OBJECT_ON_FIELD;
+				*field = REFINERY_ON_FIELD;
 			}
+		}
+	}
+}
+
+void init_minerals_param(void) {
+	if (minerals_param == NULL)
+		minerals_param = g_malloc0((gsize)(sizeof(Mineral_Param)
+		* sim_params.width_of_board
+		* sim_params.height_of_board * sim_params.number_of_minerals / 100));
+}
+
+void init_minerals_on_board(void) {
+	int seed = time(NULL);
+	int number_of_minerals = sim_params.width_of_board
+		* sim_params.height_of_board * sim_params.number_of_minerals / 100;
+		
+	srand(seed);
+	
+	int mineral_ind = 0;
+    while (mineral_ind < number_of_minerals) {
+		int x_coord = rand() % ((sim_params.width_of_board - 5) - 4 + 1) + 4;
+		int y_coord = rand() % ((sim_params.height_of_board - 5) - 4 + 1) + 4;
+		
+		Board_Coord_Param *field;
+		field = get_field_of_board(x_coord, y_coord);
+		
+		if (*field == EMPTY_FIELD) {
+			*field = MINERAL_ON_FIELD;
+			
+			minerals_param[mineral_ind].mineral_coord.x_coord = x_coord;
+			minerals_param[mineral_ind].mineral_coord.y_coord = y_coord;
+			minerals_param[mineral_ind].is_exist = TRUE;
+			++mineral_ind;
 		}
 	}
 }

@@ -1,8 +1,8 @@
 #include "simulator_data.h"
 #include "board_help_calcs.h"
 
-int *get_field_of_board(int x_coord, int y_coord) {
-	int *field = NULL;
+Board_Coord_Param *get_field_of_board(int x_coord, int y_coord) {
+	Board_Coord_Param *field = NULL;
 	if (x_coord >= 0 && x_coord < sim_params.width_of_board && y_coord >= 0 && y_coord < sim_params.height_of_board)
 		field = board_coord_sys + sim_params.width_of_board * y_coord + x_coord;
 	return field;

@@ -6,10 +6,11 @@
 gboolean read_simulator_config(Simulator_Params * const sim_params) {
 	config_t cfg;               /*Returns all parameters in this structure */
 	config_setting_t *setting;
-	long int harvesters_number_param;
+	long int number_of_harvesters_param;
 	long int width_of_board_param;
 	long int height_of_board_param;
 	long int port_number_param;
+	long int number_of_minerals_param;
 	
 	char *config_file_name = "config/simulator_config.txt";
  
@@ -30,7 +31,7 @@ gboolean read_simulator_config(Simulator_Params * const sim_params) {
     if (!config_lookup_int(&cfg, "port_number", &port_number_param))
 		ret_params = FALSE;
  
-    if (!config_lookup_int(&cfg, "harvester_number", &harvesters_number_param))
+    if (!config_lookup_int(&cfg, "number_of_harvesters", &number_of_harvesters_param))
 		ret_params = FALSE;
 	
 	if (!config_lookup_int(&cfg, "width_of_board", &width_of_board_param))
@@ -38,17 +39,18 @@ gboolean read_simulator_config(Simulator_Params * const sim_params) {
 	
 	if (!config_lookup_int(&cfg, "height_of_board", &height_of_board_param))
 		ret_params = FALSE;
+		
+	if (!config_lookup_int(&cfg, "number_of_minerals", &number_of_minerals_param))
+		ret_params = FALSE;
 	
     config_destroy(&cfg);
     
     if (ret_params) {
 		sim_params->port_number = (int)port_number_param;
-		sim_params->harvesters_number = (int)harvesters_number_param;
+		sim_params->number_of_harvesters = (int)number_of_harvesters_param;
 		sim_params->width_of_board = (int)width_of_board_param;
 		sim_params->height_of_board = (int)height_of_board_param;
-		
-		if (sim_params->harvesters_number > sim_params->height_of_board)
-			sim_params->harvesters_number = sim_params->height_of_board;
+		sim_params->number_of_minerals = (int)number_of_minerals_param;
 	}
     
     return ret_params;

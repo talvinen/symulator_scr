@@ -3,16 +3,19 @@
 
 #include <cairo.h>
 #include <gtk/gtk.h>
-#include "simulator_config.h"
+#include "../common/simulator_config.h"
 #include "../common/rpc_data.h"
 
-#define SIM_IMGS_NUMBER 4
+#define SIM_IMGS_NUMBER 5
 #define SIM_REFINERYS_NUMBER 3
 
-enum {
+typedef enum {
 	EMPTY_FIELD = 0,
-	OBJECT_ON_FIELD,
-};
+	HARVESTER_ON_FIELD,
+	REFINERY_ON_FIELD,
+	MINERAL_ON_FIELD,
+	DROP_ZONE_ON_FIELD
+} Board_Coord_Param;
 
 typedef int Harvester_Id;
 
@@ -29,14 +32,20 @@ typedef struct {
 } Refinery_Param;
 
 typedef struct {
+	Object_Coord_On_Board mineral_coord;
+	gboolean is_exist;
+} Mineral_Param;
+
+typedef struct {
 	cairo_surface_t *image;
 	double width;
 	double height;
 } Simulator_Imgs;
 
 extern Simulator_Params sim_params;
-extern int *board_coord_sys;
+extern Board_Coord_Param *board_coord_sys;
 extern Harvester_Param *harvesters_param;
+extern Mineral_Param *minerals_param;
 extern Refinery_Param refinerys_param[SIM_REFINERYS_NUMBER];
 extern Simulator_Imgs simulator_imgs[SIM_IMGS_NUMBER];
 extern GStaticRecMutex board_coord_sys_mutex;

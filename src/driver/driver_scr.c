@@ -12,6 +12,7 @@
 #include <tpl.h>
 #include <glib.h>
 
+#include "../common/simulator_config.h"
 #include "../common/rpc_all.h"
 #include "../common/rpc_data.h"
 
@@ -19,42 +20,68 @@
 #define THREADS_N 5
  
 
-int connectToServ(const char *host, const int port);
-void sendToCli(const int sockfd, const Object_Coord_On_Board const *mvtd);
+int connect_to_simulator(const char * const host, int port);
+void *driver_thread_work(void *ptr);
 gboolean respond_from_simulator(int sockfd);
 
-static const char *servAdrr = "localhost";
+//******************GLOBAL VARIABLES********************
+Simulator_Params sim_params = {0};
+//******************************************************
+
+static const char * const serv_adrr = "localhost";
 
 int main(int argc, char *argv[]) {	
-		int sockfd = 0;
+		int sock_fd = 0;
+		
+		if (!read_simulator_config(&sim_params))
+			return 1;
+		
+		pthread_t driver_threads[sim_params.number_of_harvesters];
+		
 		Object_Coord_On_Board mvtd;
 		
 		mvtd.x_coord = 0;
 		mvtd.y_coord = 0;
 		
-		sockfd = connectToServ(servAdrr, 8787);
-		if (sockfd < 0) {
-			fprintf(stderr, "ERROR unable to connect to server %s on port %d\n", servAdrr, 8787);
-			exit(1);
-		}
-		sleep(10);
-		tpl_bin tb;
-	while(1) {
-		sleep(1);
-		sendToCli(sockfd, &mvtd);
-		if(!respond_from_simulator(sockfd))
+		int driver_thread = 0;
+		while (driver_thread < sim_params.number_of_harvesters)
+			(void)pthread_create(&driver_threads[driver_thread++], NULL, &driver_thread_work, NULL);
+		
+		driver_thread = 0;
+		while (driver_thread < sim_params.number_of_harvesters)
+			(void)pthread_join(driver_threads[driver_thread++], NULL);
+		
+		
+		//sleep(10);
+		//tpl_bin tb;
+	//while(1) {
+		//sleep(1);
+		//sendToCli(sockfd, &mvtd);
+		//if(!respond_from_simulator(sockfd))
 			//break;
-			printf("\nNO MOVE\n");
-		++(mvtd.x_coord);
-		++(mvtd.y_coord);
-	}
-	close(sockfd);
-	printf("dupa\n");
+		//	printf("\nNO MOVE\n");
+		//++(mvtd.x_coord);
+		//++(mvtd.y_coord);
+	//}
+	//close(sockfd);
+	//printf("dupa\n");
 	return 0;
 }
 
-int connectToServ(const char *host, const int port) {
-	int sockfd/*, n*/;
+void *driver_thread_work(void *ptr) {
+	int sock_fd = connect_to_simulator(serv_adrr, sim_params.port_number);
+	
+	if (sock_fd < 0) {
+		fprintf(stderr, "ERROR unable to connect to server %s on port %d\n", serv_adrr, 8787);
+	} else {
+		fprintf(stderr, "success connect to server %s on port %d\n", serv_adrr, 8787);
+	}
+	//while (TRUE);
+	return NULL;
+}
+
+int connect_to_simulator(const char * const host, int port) {
+	int sockfd;
 	struct sockaddr_in serv_addr;
 	struct hostent *server;
 	
