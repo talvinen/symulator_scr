@@ -23,6 +23,7 @@ typedef struct {
 	Object_Coord_On_Board harvester_coord;
 	Harvester_Id harvester_id;
 	int harvester_socket;
+	gboolean have_minerals;
 } Harvester_Param;
 
 typedef struct {
@@ -32,20 +33,16 @@ typedef struct {
 } Refinery_Param;
 
 typedef struct {
-	Object_Coord_On_Board mineral_coord;
-	gboolean is_exist;
-} Mineral_Param;
-
-typedef struct {
 	RsvgHandle *image;
 	int width;
 	int height;
 } Simulator_Imgs;
 
+
 extern Simulator_Params sim_params;
 extern Board_Coord_Param *board_coord_sys;
 extern Harvester_Param *harvesters_param;
-extern Mineral_Param *minerals_param;
+extern GHashTable *minerals_param;
 extern Refinery_Param refinerys_param[SIM_REFINERYS_NUMBER];
 extern Object_Coord_On_Board drop_zones_param[SIM_REFINERYS_NUMBER];
 extern Simulator_Imgs simulator_imgs[SIM_IMGS_NUMBER];

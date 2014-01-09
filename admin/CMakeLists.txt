@@ -16,6 +16,8 @@ set(common_src_dir ${src_dir}/common/)
 # create a list of source files (easier to maintain)
 set(sources_simulator ${simulator_src_dir}/simulator_scr.c
 					  ${simulator_src_dir}/simulator_scr.h
+					  ${simulator_src_dir}/simulator_utils.c
+					  ${simulator_src_dir}/simulator_utils.h
 					  ${common_src_dir}/simulator_config.c
 					  ${common_src_dir}/simulator_config.h
 					  ${simulator_src_dir}/simulator_img_defines.c
@@ -32,8 +34,14 @@ set(sources_simulator ${simulator_src_dir}/simulator_scr.c
 					  ${common_src_dir}/rpc_all.h)
 
 set(sources_driver ${driver_src_dir}/driver_scr.c
+                   ${driver_src_dir}/driver_data.h
+                   ${driver_src_dir}/driver_remote_calls.c
+                   ${driver_src_dir}/driver_remote_calls.h
                    ${common_src_dir}/simulator_config.c
-                   ${common_src_dir}/simulator_config.h)
+                   ${common_src_dir}/simulator_config.h
+                   ${common_src_dir}/rpc_data.h
+				   ${common_src_dir}/rpc_all.c
+				   ${common_src_dir}/rpc_all.h)
  
 ADD_EXECUTABLE(simulator_scr ${sources_simulator})
 ADD_EXECUTABLE(driver_scr ${sources_driver})
@@ -50,5 +58,5 @@ INCLUDE_DIRECTORIES(${RSVG_INCLUDE_DIRS})
 
 FIND_PACKAGE(Threads)
 
-TARGET_LINK_LIBRARIES(simulator_scr ${GTK_LIBRARIES} ${GTHREAD_LIBRARIES} ${RSVG_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT} cairo config tpl)
-TARGET_LINK_LIBRARIES(driver_scr ${CMAKE_THREAD_LIBS_INIT} config tpl)
+TARGET_LINK_LIBRARIES(simulator_scr ${GTK_LIBRARIES} ${GTHREAD_LIBRARIES} ${RSVG_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT} cairo config tpl rt)
+TARGET_LINK_LIBRARIES(driver_scr ${CMAKE_THREAD_LIBS_INIT} config tpl rt)

@@ -22,6 +22,7 @@
 #include "../common/simulator_config.h"
 
 #include "simulator_scr.h"
+#include "simulator_utils.h"
 #include "simulator_img_defines.h"
 #include "simulator_data.h"
 #include "simulator_draw.h"
@@ -53,7 +54,7 @@ void init_minerals_on_board(void);
 Simulator_Params sim_params = {0};
 Board_Coord_Param *board_coord_sys = NULL;
 Harvester_Param *harvesters_param = NULL;
-Mineral_Param *minerals_param = NULL;
+GHashTable *minerals_param = NULL;
 
 Refinery_Param refinerys_param[SIM_REFINERYS_NUMBER] = {0};
 Object_Coord_On_Board drop_zones_param[SIM_REFINERYS_NUMBER] = {0};
@@ -168,7 +169,7 @@ void *run_server(void *ptr) {
 	listen(sock_fd, 5);
 	cli_len = sizeof(cli_addr);
 	
-	Harvester_Id harvester_id = 0;
+	Harvester_Id harvester_id = -1;
 	while (harvester_id < sim_params.number_of_harvesters) {
 		newsock_fd = accept(sock_fd, (struct sockaddr *) &cli_addr, &cli_len);
 		
@@ -177,8 +178,16 @@ void *run_server(void *ptr) {
 			stop_simulator();
 		}
 		
+		if (harvester_id == -1) {
+			send_simulator_drop_zones_info(newsock_fd);
+			close(newsock_fd);
+			++harvester_id;
+			continue;
+		}
+		
 		harvesters_param[harvester_id].harvester_id = harvester_id;
 		harvesters_param[harvester_id].harvester_socket = newsock_fd;
+		harvesters_param[harvester_id].have_minerals = FALSE;
 		
 		harvester_threads[harvester_id] = g_thread_create((GThreadFunc)harvester_thread_work,
 			(void *)&(harvesters_param[harvester_id++]), TRUE, &err);
@@ -336,9 +345,7 @@ void init_refinerys_on_board(void) {
 
 void init_minerals_param(void) {
 	if (minerals_param == NULL)
-		minerals_param = g_malloc0((gsize)(sizeof(Mineral_Param)
-		* sim_params.width_of_board
-		* sim_params.height_of_board * sim_params.number_of_minerals / 100));
+		minerals_param = g_hash_table_new_full(g_str_hash, g_str_equal, gHashTableDestroyNotify, gHashTableDestroyNotify);
 }
 
 void init_minerals_on_board(void) {
@@ -352,8 +359,8 @@ void init_minerals_on_board(void) {
 	int min_x= sim_refinery_width + 1;
 	int min_y = sim_refinery_height + 1;
 	
-	int mineral_ind = 0;
-    while (mineral_ind < number_of_minerals) {
+	int index;
+    for (index = 0; index < number_of_minerals; ++index) {
 		int x_coord = rand() % ((sim_params.width_of_board - (min_x + 1)) - min_x + 1) + min_x;
 		int y_coord = rand() % ((sim_params.height_of_board - (min_y + 1)) - min_y + 1) + min_y;
 		
@@ -363,10 +370,14 @@ void init_minerals_on_board(void) {
 		if (*field == EMPTY_FIELD) {
 			*field = MINERAL_ON_FIELD;
 			
-			minerals_param[mineral_ind].mineral_coord.x_coord = x_coord;
-			minerals_param[mineral_ind].mineral_coord.y_coord = y_coord;
-			minerals_param[mineral_ind].is_exist = TRUE;
-			++mineral_ind;
+			gchar *coord_key = g_strdup_printf("%d%d", x_coord, y_coord);
+			
+			Object_Coord_On_Board *mineral_coord =
+									(Object_Coord_On_Board *)malloc(sizeof(Object_Coord_On_Board));
+			mineral_coord->x_coord = x_coord;
+			mineral_coord->y_coord = y_coord;
+			
+			g_hash_table_insert(minerals_param, coord_key, mineral_coord);
 		}
 	}
 }

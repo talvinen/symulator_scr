@@ -13,39 +13,44 @@
 #include <glib.h>
 
 #include "../common/simulator_config.h"
-#include "../common/rpc_all.h"
 #include "../common/rpc_data.h"
-
-#define NUMBER_N 500
-#define THREADS_N 5
+#include "driver_data.h"
  
 
 int connect_to_simulator(const char * const host, int port);
 void *driver_thread_work(void *ptr);
-gboolean respond_from_simulator(int sockfd);
 
 //******************GLOBAL VARIABLES********************
 Simulator_Params sim_params = {0};
+Object_Coord_On_Board *drop_zones_param = NULL;
+int drop_zones_param_size = 0;
 //******************************************************
 
 static const char * const serv_adrr = "localhost";
 
 int main(int argc, char *argv[]) {	
-		int sock_fd = 0;
-		
 		if (!read_simulator_config(&sim_params))
 			return 1;
 		
 		pthread_t driver_threads[sim_params.number_of_harvesters];
 		
-		Object_Coord_On_Board mvtd;
+		int sock_fd = connect_to_simulator(serv_adrr, sim_params.port_number);
 		
-		mvtd.x_coord = 0;
-		mvtd.y_coord = 0;
+		if (sock_fd < 0) {
+			fprintf(stderr, "ERROR unable to connect to server %s on port %d\n", serv_adrr, 8787);
+			exit(1);
+		}
+		
+		recv_info_from_simulator(sock_fd);
+		close(sock_fd);
+		
+		if (drop_zones_param == NULL)
+			exit(1);
 		
 		int driver_thread = 0;
 		while (driver_thread < sim_params.number_of_harvesters)
-			(void)pthread_create(&driver_threads[driver_thread++], NULL, &driver_thread_work, NULL);
+			if (pthread_create(&driver_threads[driver_thread++], NULL, &driver_thread_work, NULL) == 0)
+				printf("Udane\n");
 		
 		driver_thread = 0;
 		while (driver_thread < sim_params.number_of_harvesters)
@@ -69,12 +74,87 @@ int main(int argc, char *argv[]) {
 }
 
 void *driver_thread_work(void *ptr) {
-	int sock_fd = connect_to_simulator(serv_adrr, sim_params.port_number);
+	const int sock_fd = connect_to_simulator(serv_adrr, sim_params.port_number);
+	srand(time(NULL));
 	
 	if (sock_fd < 0) {
 		fprintf(stderr, "ERROR unable to connect to server %s on port %d\n", serv_adrr, 8787);
 	} else {
 		fprintf(stderr, "success connect to server %s on port %d\n", serv_adrr, 8787);
+		
+		int x_coord, y_coord;
+		int x_coord_current, y_coord_current;
+		get_harvester_coordinates_drv_call(sock_fd);
+		get_harvester_coordinates_drv_recv(&x_coord, &y_coord, sock_fd);
+		
+		printf("x_coord %d y_coord %d\n", x_coord, y_coord);
+		
+		x_coord_current = x_coord;
+		y_coord_current = y_coord;
+		Object_Coord_On_Board mvtd;
+		while(TRUE) {
+			int x_coord_add;
+			int y_coord_add;
+			
+			mvtd.x_coord = x_coord_current;
+			mvtd.y_coord = y_coord_current;
+			
+			int rand_move = rand() % 7;
+			
+			if (rand_move == 0) {
+				x_coord_add = -1;
+				y_coord_add = 1;
+			} else if (rand_move == 1) {
+				x_coord_add = 1;
+				y_coord_add = 1;
+			} else if (rand_move == 2) {
+				x_coord_add = 1;
+				y_coord_add = -1;
+			} else if (rand_move == 3) {
+				x_coord_add = 0;
+				y_coord_add = 1;
+			} else if (rand_move == 4) {
+				x_coord_add = 1;
+				y_coord_add = 0;
+			} else if (rand_move == 5) {
+				x_coord_add = 0;
+				y_coord_add = -1;
+			} else if (rand_move == 6) {
+				x_coord_add = -1;
+				y_coord_add = 0;
+			}
+			
+			if (mvtd.x_coord == sim_params.width_of_board - 1)
+				if (x_coord_add == 1)
+					x_coord_add = 0;
+			
+			if (mvtd.x_coord == 0)
+					if (x_coord_add == -1)
+						x_coord_add = 0;
+			
+			
+			if (mvtd.y_coord == sim_params.height_of_board - 1)
+				if (y_coord_add == 1)
+					y_coord_add = 0;
+			
+			if (mvtd.y_coord == 0)
+					if (y_coord_add == -1)
+						y_coord_add = 0;
+			
+			mvtd.x_coord += x_coord_add;
+			mvtd.y_coord += y_coord_add;
+			
+			harvester_move_to_drv_call(sock_fd, &mvtd);
+			gboolean move_done, have_minerals;
+			harvester_move_to_drv_recv(&move_done, &have_minerals, sock_fd);
+			
+			if (move_done) {
+				x_coord_current = mvtd.x_coord;
+				y_coord_current = mvtd.y_coord;
+			}
+				
+			sleep(1);
+		}
 	}
 	//while (TRUE);
 	return NULL;
@@ -110,43 +190,4 @@ int connect_to_simulator(const char * const host, int port) {
 	}
 	
 	return sockfd;
-}
-
-void sendToCli(const int sockfd, const Object_Coord_On_Board const *mvtd) {
-	tpl_node *tn;
-	tpl_bin tb;
-	int function_name;
-	
-	tb.addr = (void *)mvtd;
-	tb.sz = sizeof(Object_Coord_On_Board);
-	
-	function_name = HARVESTER_MOVE_TO_SIM_CALL;
-	
-	tn = tpl_map("iB", &function_name, &tb);
-	tpl_pack(tn,0);
-	
-	tpl_dump(tn, TPL_FD, sockfd);
-	tpl_free(tn);
-}
-
-gboolean respond_from_simulator(int sockfd) {
-	tpl_node *tn = NULL;
-	tpl_bin tb;
-	void *img = NULL;
-	int rc = 0;
-	size_t sz = 0;
-	
-	int resp;
-	gboolean ret;
-	
-	rc = tpl_gather(TPL_GATHER_BLOCKING, sockfd, &img, &sz);
-	
-	if (rc > 0) {
-		tn = tpl_map("i", &resp);
-		tpl_load(tn, TPL_MEM, img, sz);
-		tpl_unpack(tn, 0);
-		tpl_free(tn);
-	}
-	ret = (gboolean)resp;
-	return ret;
 }

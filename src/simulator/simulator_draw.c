@@ -20,7 +20,7 @@ static void draw_refinerys(cairo_t *cr, const Draw_Params * const draw_params);
 static void draw_drop_zones(cairo_t *cr, const Draw_Params * const draw_params);
 
 gboolean on_draw_event(GtkWidget *widget, GdkEventExpose *event, gpointer user_data) {
-	cairo_t *cr = gdk_cairo_create(gtk_widget_get_window(widget));
+	cairo_t *cr = gdk_cairo_create(/*gtk_widget_get_window(*/widget->window);
 	gint width = widget->allocation.width;
 	gint height = widget->allocation.height;
 	
@@ -39,6 +39,8 @@ gboolean on_draw_event(GtkWidget *widget, GdkEventExpose *event, gpointer user_d
 	draw_refinerys(cr, &draw_params);
 	draw_harvesters(cr, &draw_params);
 	draw_drop_zones(cr, &draw_params);
+	
+	cairo_destroy(cr);
 	return FALSE;
 }
 
@@ -106,17 +108,17 @@ static void draw_minerals(cairo_t *cr, const Draw_Params * const draw_params) {
 	const int image_width = simulator_imgs[MINERALS_IMG].width;
 	const int image_height = simulator_imgs[MINERALS_IMG].height;
 	
-		
-	int index;
-	for (index = 0; index < number_of_minerals; ++index) {
-		
-		if (!minerals_param[index].is_exist)
-			continue;
-		
+	GList *minerals_coord_l;
+	
+	minerals_coord_l = g_list_first(g_hash_table_get_values(minerals_param));
+	
+	while (minerals_coord_l != NULL) {
 		cairo_save(cr);
 		
-		int x_coord = minerals_param[index].mineral_coord.x_coord;
-		int y_coord = minerals_param[index].mineral_coord.y_coord;
+		Object_Coord_On_Board *mineral_coord = (Object_Coord_On_Board *)minerals_coord_l->data;
+		
+		int x_coord = mineral_coord->x_coord;
+		int y_coord = mineral_coord->y_coord;
 	
 		cairo_translate(cr, draw_params->delta_width * x_coord, draw_params->delta_height * y_coord);
 		cairo_scale(cr, draw_params->delta_width / image_width,
@@ -125,7 +127,11 @@ static void draw_minerals(cairo_t *cr, const Draw_Params * const draw_params) {
 		rsvg_handle_render_cairo(simulator_imgs[MINERALS_IMG].image, cr);
 	
 		cairo_restore(cr);
+		
+		minerals_coord_l = g_list_next(minerals_coord_l);
 	}
+    
+    g_list_free(minerals_coord_l);
 }
 
 static void draw_refinerys(cairo_t *cr, const Draw_Params * const draw_params) {
