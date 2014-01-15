@@ -43,8 +43,11 @@ void harvester_move_to_sim_call(const tpl_bin * const tb, Harvester_Id harvester
 					char key[10];
 					(void)sprintf(key, "%d%d", harvester_coord->x_coord, harvester_coord->y_coord);
 					(void)g_hash_table_remove(minerals_param, key);
-					//harvesters_param[harvester_id].have_minerals = TRUE;
+					harvesters_param[harvester_id].have_minerals = TRUE;
 				}
+			} else if (*field == DROP_ZONE_ON_FIELD) {
+				*field = HARVESTER_ON_FIELD;
+				harvesters_param[harvester_id].have_minerals = FALSE;
 			} else
 				move_done = FALSE;
 		else
@@ -57,7 +60,22 @@ void harvester_move_to_sim_call(const tpl_bin * const tb, Harvester_Id harvester
 			y_coord = &(harvesters_param[harvester_id].harvester_coord.y_coord);
 			
 			field = get_field_of_board(*x_coord, *y_coord);
-			*field = EMPTY_FIELD;
+			
+			char key[10];
+			(void)sprintf(key, "%d%d", *x_coord, *y_coord);
+			if (g_hash_table_lookup(minerals_param, key))
+				*field = MINERAL_ON_FIELD;
+			
+			int i;
+			for (i = 0; i < SIM_REFINERYS_NUMBER; ++i) {
+				if (drop_zones_param[i].x_coord == *x_coord && drop_zones_param[i].y_coord == *y_coord) {
+					*field = DROP_ZONE_ON_FIELD;
+					break;
+				}
+			}
+			
+			if (*field != MINERAL_ON_FIELD && *field != DROP_ZONE_ON_FIELD)
+				*field = EMPTY_FIELD;
 			
 			*x_coord = harvester_coord->x_coord;
 			*y_coord = harvester_coord->y_coord;
