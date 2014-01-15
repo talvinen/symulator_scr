@@ -75,6 +75,9 @@ int main(int argc, char *argv[]) {
 
 void *driver_thread_work(void *ptr) {
 	const int sock_fd = connect_to_simulator(serv_adrr, sim_params.port_number);
+	pthread_t threadID	= pthread_self();
+	//unsigned int seed	= getpid() * time(NULL) * (threadID * i);
+	
 	srand(time(NULL));
 	
 	if (sock_fd < 0) {
@@ -82,78 +85,130 @@ void *driver_thread_work(void *ptr) {
 	} else {
 		fprintf(stderr, "success connect to server %s on port %d\n", serv_adrr, 8787);
 		
-		int x_coord, y_coord;
-		int x_coord_current, y_coord_current;
+		int x_coord_s, y_coord_s;
+		int x_coord_c, y_coord_c;
+		//Pobieramy wspolrzedne startu
 		get_harvester_coordinates_drv_call(sock_fd);
-		get_harvester_coordinates_drv_recv(&x_coord, &y_coord, sock_fd);
+		get_harvester_coordinates_drv_recv(&x_coord_s, &y_coord_s, sock_fd);
 		
-		printf("x_coord %d y_coord %d\n", x_coord, y_coord);
+		printf("Wspolrzedne startu x = %d y = %d\n", x_coord_s, y_coord_s);
 		
-		x_coord_current = x_coord;
-		y_coord_current = y_coord;
+		x_coord_c = x_coord_s;
+		y_coord_c = y_coord_s;
 		Object_Coord_On_Board mvtd;
-		while(TRUE) {
-			int x_coord_add;
-			int y_coord_add;
-			
-			mvtd.x_coord = x_coord_current;
-			mvtd.y_coord = y_coord_current;
-			
-			int rand_move = rand() % 7;
-			
-			if (rand_move == 0) {
-				x_coord_add = -1;
-				y_coord_add = 1;
-			} else if (rand_move == 1) {
-				x_coord_add = 1;
-				y_coord_add = 1;
-			} else if (rand_move == 2) {
-				x_coord_add = 1;
-				y_coord_add = -1;
-			} else if (rand_move == 3) {
-				x_coord_add = 0;
-				y_coord_add = 1;
-			} else if (rand_move == 4) {
-				x_coord_add = 1;
-				y_coord_add = 0;
-			} else if (rand_move == 5) {
-				x_coord_add = 0;
-				y_coord_add = -1;
-			} else if (rand_move == 6) {
-				x_coord_add = -1;
-				y_coord_add = 0;
+		
+		int min_x = /*sim_refinery_width*/3 + 1;
+		int min_y = /*sim_refinery_height*/3 + 1;
+		
+		gboolean have_minerals = FALSE;
+	
+		while (TRUE) {
+			unsigned int seed;
+			int x_coord_d, y_coord_d;
+			int i = 1;
+			if (!have_minerals) {
+				seed = getpid() * time(NULL) * threadID * (x_coord_s + y_coord_s) * i++;
+				//Tworze wspolrzedne celu
+				x_coord_d = rand_r(&seed) % ((sim_params.width_of_board - (min_x + 1)) - min_x + 1) + min_x;
+				seed = getpid() * time(NULL) * threadID * (x_coord_s + y_coord_s) * i++;
+				y_coord_d = rand_r(&seed) % ((sim_params.height_of_board - (min_y + 1)) - min_y + 1) + min_y;
+			} else {
+				unsigned int seed;
+				seed = getpid() * time(NULL) * threadID * (x_coord_s + y_coord_s);
+				//Tworze wspolrzedne celu
+				int rand_refinery = rand_r(&seed) % 3;
+				x_coord_d = drop_zones_param[rand_refinery].x_coord;
+				y_coord_d = drop_zones_param[rand_refinery].y_coord;
 			}
+			gboolean move_done = FALSE;
+			while(TRUE) {
+				int x_coord_add;
+				int y_coord_add;
 			
-			if (mvtd.x_coord == sim_params.width_of_board - 1)
-				if (x_coord_add == 1)
-					x_coord_add = 0;
+				mvtd.x_coord = x_coord_c;
+				mvtd.y_coord = y_coord_c;
 			
-			if (mvtd.x_coord == 0)
-					if (x_coord_add == -1)
+				if (move_done) {
+					if (x_coord_c - x_coord_d > 0)
+						x_coord_add = -1;
+					else if (x_coord_c - x_coord_d == 0)
 						x_coord_add = 0;
-			
-			
-			if (mvtd.y_coord == sim_params.height_of_board - 1)
-				if (y_coord_add == 1)
-					y_coord_add = 0;
-			
-			if (mvtd.y_coord == 0)
-					if (y_coord_add == -1)
-						y_coord_add = 0;
-			
-			mvtd.x_coord += x_coord_add;
-			mvtd.y_coord += y_coord_add;
-			
-			harvester_move_to_drv_call(sock_fd, &mvtd);
-			gboolean move_done, have_minerals;
-			harvester_move_to_drv_recv(&move_done, &have_minerals, sock_fd);
-			
-			if (move_done) {
-				x_coord_current = mvtd.x_coord;
-				y_coord_current = mvtd.y_coord;
-			}
+					else if (x_coord_c - x_coord_d < 0)
+						x_coord_add = 1;
 				
-			sleep(1);
+					if (y_coord_c - y_coord_d > 0)
+						y_coord_add = -1;
+					else if (y_coord_c - y_coord_d == 0)
+						y_coord_add = 0;
+					else if (y_coord_c - y_coord_d < 0)
+						y_coord_add = 1;
+				} else {
+					seed = getpid() * time(NULL) * threadID * (x_coord_s + y_coord_s) * i++;
+					int rand_move = rand_r(&seed) % 7;
+			
+					if (rand_move == 0) {
+						x_coord_add = -1;
+						y_coord_add = 1;
+					} else if (rand_move == 1) {
+						x_coord_add = 1;
+						y_coord_add = 1;
+					} else if (rand_move == 2) {
+						x_coord_add = 1;
+						y_coord_add = -1;
+					} else if (rand_move == 3) {
+						x_coord_add = 0;
+						y_coord_add = 1;
+					} else if (rand_move == 4) {
+						x_coord_add = 1;
+						y_coord_add = 0;
+					} else if (rand_move == 5) {
+						x_coord_add = 0;
+						y_coord_add = -1;
+					} else if (rand_move == 6) {
+						x_coord_add = -1;
+						y_coord_add = 0;
+					}
+			
+					if (mvtd.x_coord == sim_params.width_of_board - 1)
+						if (x_coord_add == 1)
+							x_coord_add = 0;
+			
+					if (mvtd.x_coord == 0)
+						if (x_coord_add == -1)
+							x_coord_add = 0;
+			
+			
+					if (mvtd.y_coord == sim_params.height_of_board - 1)
+						if (y_coord_add == 1)
+							y_coord_add = 0;
+			
+					if (mvtd.y_coord == 0)
+						if (y_coord_add == -1)
+							y_coord_add = 0;
+				}
+							
+							
+				mvtd.x_coord += x_coord_add;
+				mvtd.y_coord += y_coord_add;
+			
+				harvester_move_to_drv_call(sock_fd, &mvtd);
+				//gboolean have_minerals;
+				harvester_move_to_drv_recv(&move_done, &have_minerals, sock_fd);
+			
+				if (move_done) {
+					x_coord_c = mvtd.x_coord;
+					y_coord_c = mvtd.y_coord;
+					sleep(1);
+				}
+				
+				if (have_minerals)
+					break;
+			
+				if (x_coord_c == x_coord_d && y_coord_c == y_coord_d)
+					break;
+				
+				//sleep(1);
+			}
 		}
 	}
 	//while (TRUE);
