@@ -37,8 +37,8 @@ gboolean on_draw_event(GtkWidget *widget, GdkEventExpose *event, gpointer user_d
 	draw_grid(cr, &draw_params);
 	draw_minerals(cr, &draw_params);
 	draw_refinerys(cr, &draw_params);
-	draw_harvesters(cr, &draw_params);
 	draw_drop_zones(cr, &draw_params);
+	draw_harvesters(cr, &draw_params);
 	
 	cairo_destroy(cr);
 	return FALSE;
