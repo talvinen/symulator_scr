@@ -39,24 +39,26 @@ void harvester_move_to_drv_call(const int sockfd, const Object_Coord_On_Board co
 	tpl_free(tn);
 }
 
-void harvester_move_to_drv_recv(gboolean *move_done, gboolean *have_minerals, int sockfd) {
+void harvester_move_to_drv_recv(gboolean *move_done, gboolean *have_minerals,
+									gboolean *minerals_collected, int sockfd) {
 	tpl_node *tn = NULL;
 	void *img = NULL;
 	int rc = 0;
 	size_t sz = 0;
 	
-	int recv1, recv2;
+	char recv1, recv2, recv3;
 	
 	rc = tpl_gather(TPL_GATHER_BLOCKING, sockfd, &img, &sz);
 	
 	if (rc > 0) {
-		tn = tpl_map("ii", &recv1, &recv2);
+		tn = tpl_map("ccc", &recv1, &recv2, &recv3);
 		tpl_load(tn, TPL_MEM, img, sz);
 		tpl_unpack(tn, 0);
 		tpl_free(tn);
 	}
 	*move_done = (gboolean)recv1;
 	*have_minerals = (gboolean)recv2;
+	*minerals_collected = (gboolean)recv3;
 }
 
 void get_harvester_coordinates_drv_call(const int sockfd) {

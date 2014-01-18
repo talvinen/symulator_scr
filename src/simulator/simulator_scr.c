@@ -68,15 +68,14 @@ GMainLoop *main_loop;
 GStaticRecMutex board_coord_sys_mutex = G_STATIC_REC_MUTEX_INIT;
 //******************************************************
 
-int main(int argc, char *argv[]) {		
-	 if (g_thread_supported()) {
-		 g_thread_init(NULL);
-		 gdk_threads_init();
-	 } else {
-		 printf("g_thread NOT supported\n");
-		 return 1;
-	 }
-
+int main(int argc, char *argv[]) {
+	if (g_thread_supported()) {
+		g_thread_init(NULL);
+		gdk_threads_init();
+	} else {
+		printf("g_thread NOT supported\n");
+		return 1;
+	}
 	
 	if (!read_simulator_config(&sim_params))
 		return 1;
@@ -100,7 +99,7 @@ width_of_board = %d\nheight_of_board = %d\nnumber_of_minerals(percent of the boa
 	init_simulator_images();
 	
 	run_simulator();
-		
+			
 	return 0;
 }
 
@@ -146,9 +145,9 @@ void *run_server(void *ptr) {
 	int sock_fd, newsock_fd;
 	socklen_t cli_len;
 	struct sockaddr_in serv_addr, cli_addr;
+	int opt;
 	
 	GThread *harvester_threads[sim_params.number_of_harvesters];
-	GError *err;
 		
 	sock_fd = socket(AF_INET, SOCK_STREAM, 0);
 	if (sock_fd < 0) {
@@ -160,6 +159,9 @@ void *run_server(void *ptr) {
 	serv_addr.sin_family = AF_INET;
 	serv_addr.sin_addr.s_addr = INADDR_ANY;
 	serv_addr.sin_port = htons(sim_params.port_number);
+	
+	opt = 1;
+	setsockopt(sock_fd, SOL_SOCKET, SO_REUSEADDR, (const char *)&opt, sizeof(int));
 	
 	if (bind(sock_fd, (struct sockaddr *) &serv_addr, sizeof(serv_addr)) < 0) {
 		fprintf(stderr, "ERROR on binding\n");
@@ -190,12 +192,16 @@ void *run_server(void *ptr) {
 		harvesters_param[harvester_id].have_minerals = FALSE;
 		
 		harvester_threads[harvester_id] = g_thread_create((GThreadFunc)harvester_thread_work,
-			(void *)&(harvesters_param[harvester_id++]), TRUE, &err);
+			(void *)&(harvesters_param[harvester_id]), TRUE, NULL);
+		harvester_id++;
 	}
-	while (harvester_id < sim_params.number_of_harvesters)
-		g_thread_join(harvester_threads[harvester_id--]);
+	harvester_id = 0;
+	while (harvester_id < sim_params.number_of_harvesters) {
+		g_thread_join(harvester_threads[harvester_id++]);
+	}
 	
 	close(sock_fd);
+	(void)stop_simulator();
 	return NULL;
 }
 

@@ -101,24 +101,30 @@ void *driver_thread_work(void *ptr) {
 		int min_y = /*sim_refinery_height*/3 + 1;
 		
 		gboolean have_minerals = FALSE;
+		gboolean minerals_collected = FALSE;
 	
-		while (TRUE) {
+		gboolean end_driver = FALSE;
+		while (!end_driver) {
 			unsigned int seed;
 			int x_coord_d, y_coord_d;
 			int i = 1;
-			if (!have_minerals) {
+			if (!have_minerals && !minerals_collected) {
 				seed = getpid() * time(NULL) * threadID * (x_coord_s + y_coord_s) * i++;
 				//Tworze wspolrzedne celu
 				x_coord_d = rand_r(&seed) % ((sim_params.width_of_board - (min_x + 1)) - min_x + 1) + min_x;
 				seed = getpid() * time(NULL) * threadID * (x_coord_s + y_coord_s) * i++;
 				y_coord_d = rand_r(&seed) % ((sim_params.height_of_board - (min_y + 1)) - min_y + 1) + min_y;
-			} else {
+			} else if (have_minerals) {
 				unsigned int seed;
 				seed = getpid() * time(NULL) * threadID * (x_coord_s + y_coord_s);
 				//Tworze wspolrzedne celu
 				int rand_refinery = rand_r(&seed) % 3;
 				x_coord_d = drop_zones_param[rand_refinery].x_coord;
 				y_coord_d = drop_zones_param[rand_refinery].y_coord;
+			} else if (minerals_collected) {
+				x_coord_d = x_coord_s;
+				y_coord_d = y_coord_s;
+				end_driver = TRUE;
 			}
 			gboolean move_done = FALSE;
 			while(TRUE) {
@@ -192,8 +198,8 @@ void *driver_thread_work(void *ptr) {
 				mvtd.y_coord += y_coord_add;
 			
 				harvester_move_to_drv_call(sock_fd, &mvtd);
-				//gboolean have_minerals;
-				harvester_move_to_drv_recv(&move_done, &have_minerals, sock_fd);
+				harvester_move_to_drv_recv(&move_done, &have_minerals,
+											&minerals_collected, sock_fd);
 			
 				if (move_done) {
 					x_coord_c = mvtd.x_coord;
@@ -205,13 +211,10 @@ void *driver_thread_work(void *ptr) {
 					break;
 			
 				if (x_coord_c == x_coord_d && y_coord_c == y_coord_d)
-					break;
-				
-				//sleep(1);
+					break;				
 			}
 		}
 	}
-	//while (TRUE);
 	return NULL;
 }
 

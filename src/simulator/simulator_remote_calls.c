@@ -8,7 +8,8 @@ static void get_harvester_coordinates_sim_call(const tpl_bin * const __attribute
 												Harvester_Id harvester_id);
 
 
-static void harvester_move_to_sim_reply(gboolean move_done, gboolean have_minerals, int sockfd);
+static void harvester_move_to_sim_reply(gboolean move_done, gboolean have_minerals,
+									gboolean minerals_collected, int sockfd);
 static void get_harvester_coordinates_sim_reply(int x_coord, int y_coord, int sockfd);
 
 void (*callback_function_sim[]) (const tpl_bin * const tb, Harvester_Id harvester_id) = {
@@ -16,7 +17,7 @@ void (*callback_function_sim[]) (const tpl_bin * const tb, Harvester_Id harveste
 	get_harvester_coordinates_sim_call
 };
 
-void harvester_move_to_sim_call(const tpl_bin * const tb, Harvester_Id harvester_id) {
+static void harvester_move_to_sim_call(const tpl_bin * const tb, Harvester_Id harvester_id) {
 	gboolean move_done = TRUE;
 	gboolean have_minerals = FALSE;
 	
@@ -33,7 +34,7 @@ void harvester_move_to_sim_call(const tpl_bin * const tb, Harvester_Id harvester
 		
 		field = get_field_of_board(harvester_coord->x_coord, harvester_coord->y_coord);
 		
-		if (field)
+		if (field) {
 			if (*field == EMPTY_FIELD)
 				*field = HARVESTER_ON_FIELD;
 			else if (*field == MINERAL_ON_FIELD) {
@@ -50,7 +51,7 @@ void harvester_move_to_sim_call(const tpl_bin * const tb, Harvester_Id harvester
 				harvesters_param[harvester_id].have_minerals = FALSE;
 			} else
 				move_done = FALSE;
-		else
+		} else
 			move_done = FALSE;
 		
 		int *x_coord;
@@ -85,17 +86,20 @@ void harvester_move_to_sim_call(const tpl_bin * const tb, Harvester_Id harvester
 	}
 	
 	int socket = harvesters_param[harvester_id].harvester_socket;
-	harvester_move_to_sim_reply(move_done, have_minerals, socket);
+	gboolean minerals_collected = g_hash_table_size(minerals_param) == 0 ? TRUE : FALSE;
+	harvester_move_to_sim_reply(move_done, have_minerals, minerals_collected, socket);
 }
 
-void harvester_move_to_sim_reply(gboolean move_done, gboolean have_minerals, int sockfd) {
-	int32_t reply1, reply2;
+static void harvester_move_to_sim_reply(gboolean move_done, gboolean have_minerals,
+									gboolean minerals_collected, int sockfd) {
+	int32_t reply1, reply2, reply3;
 	tpl_node *tn;
 	
-	reply1 = (int32_t)move_done;
-	reply2 = (int32_t)have_minerals;
+	reply1 = (char)move_done;
+	reply2 = (char)have_minerals;
+	reply3 = (char)minerals_collected;
 	
-	tn = tpl_map("ii", &reply1, &reply2);
+	tn = tpl_map("ccc", &reply1, &reply2, &reply3);
 	tpl_pack(tn, 0);
 	
 	
@@ -119,7 +123,7 @@ void send_simulator_drop_zones_info(int sockfd) {
 	tpl_free(tn);
 }
 
-void get_harvester_coordinates_sim_call(const tpl_bin * const __attribute__((unused)) tb, Harvester_Id harvester_id) {
+static void get_harvester_coordinates_sim_call(const tpl_bin * const __attribute__((unused)) tb, Harvester_Id harvester_id) {
 	int x_coord;
 	int y_coord;
 	
@@ -130,7 +134,7 @@ void get_harvester_coordinates_sim_call(const tpl_bin * const __attribute__((unu
 	get_harvester_coordinates_sim_reply(x_coord, y_coord, socket);
 }
 
-void get_harvester_coordinates_sim_reply(int x_coord, int y_coord, int sockfd) {
+static void get_harvester_coordinates_sim_reply(int x_coord, int y_coord, int sockfd) {
 	tpl_node *tn;
 	
 	tn = tpl_map("ii", (int32_t *)&x_coord, (int32_t *)&y_coord);
